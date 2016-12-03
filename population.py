@@ -33,10 +33,11 @@ Recommended steps:
    create the region and country nodes directly, without trying to access
    the World Bank API again).
 """
+#TODO get separator
 import json
 import urllib.request as request
 
-from tree_data import AbstractTree
+from tree_dataold import AbstractTree
 
 
 # Constants for the World Bank API urls.
@@ -92,7 +93,7 @@ class PopulationTree(AbstractTree):
         Returns the path of this tree.
         @return: str | path
         """
-        return self._root
+        return ","
 
 def _load_data():
     """Create a list of trees corresponding to different world regions.
@@ -107,13 +108,15 @@ def _load_data():
     regions = _get_region_data()
     country_list = []
     PopulationTree_list = []
+    #TODO expand for loops. Make it look cleaner
     for country in country_populations:
         if country_populations[country] is not None:
             pop_size = int(country_populations[country])
-            leaf = PopulationTree(False, country, None ,pop_size)
+            leaf = PopulationTree(False, country, None, pop_size)
             country_list.append(leaf)
     for region in regions:
         region_country = []
+        #TODO inefficient
         for country in regions[region]:
             for countree in country_list:
                 if countree._root == country:
@@ -133,6 +136,7 @@ def _load_data():
     # Remember that each region tree has only two levels:
     #   - a root storing the name of the region
     #   - zero or more leaves, each representing a country in the region
+
 
 
 def _get_population_data():
@@ -208,4 +212,4 @@ def _get_json_data(url):
 if __name__ == '__main__':
     import python_ta
     # Remember to change this to check_all when cleaning up your code.
-    python_ta.check_errors(config='pylintrc.txt')
+    python_ta.check_all(config='pylintrc.txt')

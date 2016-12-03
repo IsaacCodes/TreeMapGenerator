@@ -60,12 +60,12 @@ def render_display(screen, tree, text):
     # First, clear the screen
     pygame.draw.rect(screen, pygame.color.THECOLORS['black'],
                      (0, 0, WIDTH, HEIGHT))
-    treemap = (0, 0, 1024, TREEMAP_HEIGHT)
-    text_display = (0, TREEMAP_HEIGHT, 1024, FONT_HEIGHT)
-    rectangles = tree.generate_treemap(treemap)
-    for rectangle in rectangles:
-        pygame.draw.rect(screen, rectangle[1], rectangle[0])
-    pygame.draw.rect(screen, pygame.color.THECOLORS['black'], text_display)
+
+    rect_list = tree.generate_treemap((0, 0, WIDTH, TREEMAP_HEIGHT))
+    for rect in rect_list:
+        pygame.draw.rect(screen, rect[1], rect[0])
+
+    _render_text(screen, text)
 
     # This must be called *after* all other pygame functions have run.
     pygame.display.flip()
@@ -105,72 +105,81 @@ def event_loop(screen, tree):
     # track of the state of the program.
     selected_leaf = None
 
-    Tree = tree
     while True:
         # Wait for an event
         event = pygame.event.poll()
-        # Exits from Program
         if event.type == pygame.QUIT:
+            # If window is closed, stop event loop
             return
-        #on-click
-        if event.type == pygame.MOUSEBUTTONUP:
-                # left mouse button
-            if event.button == 1:
-                mouse_pos = event.pos
-                if Tree.return_selected_tree(mouse_pos, (0, 0, 1024, TREEMAP_HEIGHT)) == selected_leaf:
-                    selected_leaf = None
-                    text_display = (0, TREEMAP_HEIGHT, 1024, FONT_HEIGHT)
-                    pygame.draw.rect(screen, pygame.color.THECOLORS['black'],
-                                     text_display)
-                    pygame.display.flip()
-                else:
-                    selected_leaf = Tree.return_selected_tree(mouse_pos, (0, 0, 1024, TREEMAP_HEIGHT))
-                # if selected_leaf == curr_leaf...
-                # (if selected leaf is clicked twice, return nothing. To
-                # be implemented)
-                # right Mouse Button
-            if event.button == 3:
-                mouse_pos = event.pos
-                selected_leaf = tree.return_selected_tree(mouse_pos, (
-                0, 0, 1024, TREEMAP_HEIGHT))
-                parent_tree = selected_leaf._parent_tree
-                #remove data size from parent
-                parent_tree.data_size -= selected_leaf.data_size
-                # remove selected leaf
-                parent_tree._subtrees.remove(selected_leaf)
-                # goes back up to the root of the tree
-                while parent_tree._parent_tree is not None:
-                    parent_tree = parent_tree._parent_tree
-
-                #re-renders tree display
-                render_display(screen, parent_tree, '')
-                # resets tracker upon deletion
-                selected_leaf = None
-                pygame.display.flip()
-
+        elif event.type == pygame.MOUSEBUTTONUP:
+            # left mouse button
+            selected_leaf = _mouse_event(screen, event, tree, selected_leaf)
         if event.type == pygame.KEYUP:
-            if selected_leaf is not None:
-                if event.key == pygame.K_UP:
-                    data_add = selected_leaf.data_size * 0.01
-                    selected_leaf.add_datasize(data_add)
-                    render_display(screen, Tree, '')
-                    pygame.display.flip()
-                if event.key == pygame.K_DOWN:
-                    if selected_leaf.data_size > 1:
-                        data_removal = selected_leaf.data_size * 0.01
-                        selected_leaf.remove_datasize(data_removal)
-                        render_display(screen, Tree, '')
-                        pygame.display.flip()
+            _keyboard_event(screen, event, tree, selected_leaf)
 
 
-        if selected_leaf is not None:
-            pygame.draw.rect(screen, pygame.color.THECOLORS['black'],
-                             (0, TREEMAP_HEIGHT, 1024, FONT_HEIGHT))
-            directory = selected_leaf.get_separator()
-            _render_text(screen, (str(directory) + "    (" + str(selected_leaf.data_size) +")"))
-            pygame.display.flip()
+def render_text_update(screen, text):
+    pygame.draw.rect(screen, pygame.color.THECOLORS['black'],
+                     (0, TREEMAP_HEIGHT, WIDTH, FONT_HEIGHT))
+    _render_text(screen, text)
+    pygame.display.flip()
 
 
+def get_hierachy(selected_leaf):
+    directory = [selected_leaf._root]
+    current_leaf = selected_leaf
+    while current_leaf._parent_tree is not None:
+            current_leaf = current_leaf._parent_tree
+            directory.insert(0, current_leaf._root)
+    a = selected_leaf.get_separator()
+    return a.join(directory)
+
+
+
+
+def _tree_to_text(selected_leaf):
+    if selected_leaf:
+        return "%s    (%s)" % (get_hierachy(selected_leaf), selected_leaf.data_size)
+    else:
+        return ""
+
+def _mouse_event(screen, event, tree, selected_leaf):
+
+    if event.pos[0] < 0 or event.pos[0] > WIDTH or event.pos[1] < 0 or \
+                    event.pos[1] > TREEMAP_HEIGHT or tree.data_size == 0:
+        # when a the tree has data size > 0, anything out of the rectangle
+        # (0,0,WIDTH,TREEMAP_HEIGHT) is out of bounds. Nothing happens
+        # However, when there are no trees with data size > 0, the whole
+        # screen becomes out of bounds.
+        return selected_leaf
+
+    # tree_at_position must exist
+    tree_at_position = tree.return_selected_tree(event.pos, (0, 0, WIDTH, TREEMAP_HEIGHT))
+
+    if event.button == 1:
+        # left click
+        if tree_at_position == selected_leaf:
+            selected_leaf = None
+            render_text_update(screen, "")
+        else:
+            selected_leaf = tree_at_position
+            render_text_update(screen, _tree_to_text(selected_leaf))
+    elif event.button == 3:
+        # right click
+        if tree_at_position == selected_leaf:
+            selected_leaf = None
+        tree_at_position.delete_node()
+        render_display(screen, tree, _tree_to_text(selected_leaf))
+    return selected_leaf
+
+
+def _keyboard_event(screen, event, tree, selected_leaf):
+    if selected_leaf:
+        if event.key == pygame.K_UP:
+            selected_leaf.increase_size()
+        if event.key == pygame.K_DOWN:
+            selected_leaf.decrease_size()
+        render_display(screen, tree, _tree_to_text(selected_leaf))
 
 
 def run_treemap_file_system(path):
@@ -203,8 +212,7 @@ if __name__ == '__main__':
     # call, with the '' replaced by a path like
     # 'C:\\Users\\David\\Documents\\csc148\\assignments' (Windows) or
     # '/Users/dianeh/Documents/courses/csc148/assignments' (OSX)
-    run_treemap_file_system('C:/Users/Isaac/Desktop/A2Test/1Obj1NestedFolderw1Obj/NestFolder')
-
+    run_treemap_file_system('/h/u11/c6/01/seahisaa/Desktop/csc148/labs/lab3/test')
 
     # To check your work for Task 5, uncomment the following function call.
-    #run_treemap_population()
+    run_treemap_population()
